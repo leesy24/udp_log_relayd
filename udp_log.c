@@ -3,6 +3,8 @@ Copyright (c) 2007 SystemBase Co., LTD  All Rights Reserved.
 
 UDP Server/Clinet		09, 31, 2007. yhlee
 ******************************************************************************/
+#include <sys/statfs.h>
+
 #include "include/sb_include.h"
 #include "include/sb_define.h"
 #include "include/sb_shared.h"
@@ -54,6 +56,18 @@ int receive_from_lan(void);
 int receive_from_port (int protocol);
 void SSM_write ();
 void PSM_write (char sw, char *data, int len);
+
+#define WORD_CNT (17)
+#define WORD_SIZE (15)
+//#define WORD_SIZE (5)
+
+char words[WORD_CNT][WORD_SIZE];
+int string_parse(char *str);
+int year, month, day;
+int sfd = 0;
+int limit;
+char prefix[9+1+1];
+
 //===============================================================================	
 int main (int argc, char *argv[])
 {
@@ -72,6 +86,14 @@ int main (int argc, char *argv[])
 	signal(SIGPIPE, SIG_IGN);	
 	//get_portview_memory ();
 	//get_snmp_memory ();
+
+	struct statfs fsb;
+
+	if(statfs("/tmp/usb", &fsb) == 0) {
+		printf("device capacity is %ld blocks, free %ld blocks, block size is %ld bytes.\n", fsb.f_blocks, fsb.f_bfree, fsb.f_bsize);
+		limit = fsb.f_blocks / 100;
+		//limit = fsb.f_blocks - 100;
+	}
 
 	SYS.lfd = 0;
 	SYS.sfd = 0;
@@ -155,7 +177,7 @@ unsigned long STimer = 0;
 	close_init ();
 	SB_msleep (1000);
 	SYS.lfd = SB_BindUdp (SYS.socket);
-	printf("SB_BindUdp(%d):retuen = %d\n", SYS.socket, SYS.lfd);
+	printf("SB_BindUdp(%d):return = %d\n", SYS.socket, SYS.lfd);
 	if (SYS.lfd <= 0)
 	{
 		return;
@@ -175,8 +197,8 @@ unsigned long STimer = 0;
 		SB_SetRts (SYS.sfd, SB_ENABLE);
 		}
 */
-	SYS.sfd = open("/tmp/usb/log.txt", O_WRONLY | O_CREAT | O_APPEND);
-	printf("open(\"/tmp/usb/log.txt\"):retuen = %d\n", SYS.sfd);
+	SYS.sfd = open("/tmp/usb/000000.txt", O_WRONLY | O_CREAT | O_APPEND);
+	printf("open(\"/tmp/usb/000000.txt\"):return = %d\n", SYS.sfd);
 	if (SYS.sfd <= 0)
 	{
 		return;
@@ -266,7 +288,112 @@ int len, sio_len;
 	if (SB_DEBUG) SB_LogDataPrint ("L->S", WORK, len); 
 	if (portview)  PSM_write ('S', WORK, len);
 */
-	write(SYS.sfd, WORK, len);
+	int cnt;
+	cnt = string_parse(WORK);
+
+	printf("cnt = %d\n", cnt);
+
+	if (cnt == 0) return 0;
+
+	struct statfs fsb;
+
+	if (statfs("/tmp/usb", &fsb) == 0) {
+		printf("device free is %ld blocks. %d\n", fsb.f_bfree, limit);
+		if (fsb.f_bfree < limit) {
+			DIR *d;
+			struct dirent *dir;
+			int min = 999999;
+			char target[256];
+			d = opendir("/tmp/usb");
+			if (d)
+			{
+				while ((dir = readdir(d)) != NULL)
+				{
+					char f_name[256];
+					int ymd;
+					strncpy(f_name, dir->d_name, 8);
+					f_name[8] = '\0';
+					ymd = atoi(f_name);
+					//printf("file name is %s, %d\n", f_name, ymd);
+					if (ymd != 0 && ymd < min) {
+						min = ymd;
+						strcpy(target, dir->d_name);
+					}
+				}
+				closedir(d);
+			}
+			char target_full[256];
+			sprintf(target_full, "/tmp/usb/%s", target);
+			printf("target full file is \"%s\".\n", target_full);
+			if (min != 999999) {
+				remove(target_full);
+			}
+		}
+	}
+
+	if (cnt == 16) {
+		int y, m, d;
+		y = atoi(words[13]);
+		m = atoi(words[14]);
+		d = m % 100;
+		m = m / 100;
+
+		int ok = 1;
+		if (y > 99 || y < 0) ok = 0;
+		if (m > 12 || m < 1) ok = 0;
+		if (d < 1) ok = 0;
+		if ((m == 1 || m == 3 || m == 5 || m == 7 ||
+			m == 8 || m == 10 || m == 12)
+			&& d > 31) ok = 0;
+		if ((m == 4 || m == 6 || m == 9 || m == 11)
+			&& d > 30) ok = 0;
+		if ((m == 2)
+			&& d > 29) ok = 0;
+
+		if (ok == 1) {
+			printf("year = %d, month = %d, day = %d\n", y, m, d);
+			if (sfd <= 0 || y != year || m != month || d != day) {
+				if (sfd > 0) {
+					fsync(sfd);
+					close(sfd);
+				}
+				char filename[100];
+				year = y;
+				month = m;
+				day = d;
+				sprintf(filename, "/tmp/usb/%02d%02d%02d.txt", year, month, day);
+				sfd = open(filename, O_WRONLY | O_CREAT | O_APPEND);
+				printf("open(\"%s\"):return = %d\n", filename, SYS.sfd);
+			}
+			if (sfd > 0)
+			{
+				if (strlen(words[2]) == 9) sprintf(prefix, "%s ", words[2]);
+				write(sfd, prefix, strlen(prefix));
+				write(sfd, WORK, len);
+				fsync(sfd);
+			}
+		}
+		else {
+			printf("E:year = %d, month = %d, day = %d\n", y, m, d);
+			if (sfd > 0) {
+				fsync(sfd);
+				close(sfd);
+				sfd = 0;
+			}
+			write(SYS.sfd, WORK, len);
+		}
+	}
+	else {
+		if (sfd > 0)
+		{
+			write(sfd, prefix, strlen(prefix));
+			write(sfd, WORK, len);
+			fsync(sfd);
+		}
+		else {
+			write(SYS.sfd, WORK, len);
+		}
+	}
 
 	return 0;
 } 
@@ -399,3 +526,35 @@ static unsigned char msr_shadow = 0;
 }		
 */
 
+#define WORD_CNT (17)
+#define WORD_SIZE (15)
+//#define WORD_SIZE (5)
+
+char words[WORD_CNT][WORD_SIZE];
+
+int string_parse(char *str)
+{
+    if (strlen(str) == 0) return 0;
+
+    char *tmp = (char *)str;
+ 	int cnt = 0;
+
+    do {
+        int l = strcspn(tmp, ",");
+	    //printf("l = %d\n", l);
+ 	    if (l > (WORD_SIZE - 1)) {
+            strncpy(words[cnt], tmp, (WORD_SIZE - 1));
+            words[cnt][(WORD_SIZE - 1)] = '\0';
+ 	    } else {
+            strncpy(words[cnt], tmp, l);
+            words[cnt][l] = '\0';
+ 	    }
+        //printf("\"%s\"\n", words[cnt]);
+ 	    cnt ++;
+        tmp += l + 1;
+    } while(tmp[-1]);
+
+	//printf("cnt = %d\n", cnt);
+
+	return (cnt);
+}
