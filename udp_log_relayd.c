@@ -37,7 +37,10 @@ struct sys_info
 
 struct sys_info  SYS;
 
-int port_no;
+int port_no = 0;
+char relay_ip [100];
+int relay_port = 0;
+
 int portview;
 int snmp;
 struct SB_PORTVIEW_STRUCT *PSM;
@@ -75,11 +78,40 @@ int main (int argc, char *argv[])
 
 	if (argc < 2)
 	{
-		printf("need port number\n");
+		printf("need port number, and/or relay ip and port\n");
+		exit(-1);
+	}
+	else if (argc == 3)
+	{
+		printf("need port number, relay ip and port\n");
 		exit(-1);
 	}
 
-	port_no = atoi (argv[1]);			// port no 1 ~ 16
+	if (atoi(argv[1]) <= 0)
+	{
+		printf("need port number on first parameter\n");
+		exit(-1);
+	}
+
+	port_no = atoi(argv[1]);
+
+	if (argc >= 3)
+	{
+		if (strlen(argv[2]) >= 100)
+		{
+			printf("need ip on second parameter\n");
+			exit(-1);
+		}
+		
+		if (atoi(argv[3]) <= 0)
+		{
+			printf("need port number on third parameter\n");
+			exit(-1);
+		}
+
+		strcpy(relay_ip, argv[2]);
+		relay_port = atoi(argv[3]);
+	}
 
 	if (SB_DEBUG) 
 		SB_LogMsgPrint ("UDP port=%d\n", port_no);
@@ -288,6 +320,9 @@ int len, sio_len;
 	if (SB_DEBUG) SB_LogDataPrint ("L->S", WORK, len); 
 	if (portview)  PSM_write ('S', WORK, len);
 */
+	if (relay_port != 0)
+		SB_SendUdpClient (SYS.lfd, WORK, len, relay_ip, relay_port);
+
 	int cnt;
 	cnt = string_parse(WORK);
 
