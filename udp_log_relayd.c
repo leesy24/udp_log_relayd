@@ -326,14 +326,14 @@ int len, sio_len;
 	int cnt;
 	cnt = string_parse(WORK);
 
-	printf("cnt = %d\n", cnt);
+	//printf("cnt = %d\n", cnt);
 
 	if (cnt == 0) return 0;
 
 	struct statfs fsb;
 
 	if (statfs("/tmp/usb", &fsb) == 0) {
-		printf("device free is %ld blocks. %d\n", fsb.f_bfree, limit);
+		//printf("device free is %ld blocks. %d\n", fsb.f_bfree, limit);
 		if (fsb.f_bfree < limit) {
 			DIR *d;
 			struct dirent *dir;
@@ -359,7 +359,7 @@ int len, sio_len;
 			}
 			char target_full[256];
 			sprintf(target_full, "/tmp/usb/%s", target);
-			printf("target full file is \"%s\".\n", target_full);
+			//printf("target full file is \"%s\".\n", target_full);
 			if (min != 999999) {
 				remove(target_full);
 			}
@@ -386,7 +386,7 @@ int len, sio_len;
 			&& d > 29) ok = 0;
 
 		if (ok == 1) {
-			printf("year = %d, month = %d, day = %d\n", y, m, d);
+			//printf("year = %d, month = %d, day = %d\n", y, m, d);
 			if (sfd <= 0 || y != year || m != month || d != day) {
 				if (sfd > 0) {
 					fsync(sfd);
@@ -398,7 +398,7 @@ int len, sio_len;
 				day = d;
 				sprintf(filename, "/tmp/usb/%02d%02d%02d.txt", year, month, day);
 				sfd = open(filename, O_WRONLY | O_CREAT | O_APPEND);
-				printf("open(\"%s\"):return = %d\n", filename, SYS.sfd);
+				//printf("open(\"%s\"):return = %d\n", filename, SYS.sfd);
 			}
 			if (sfd > 0)
 			{
@@ -409,7 +409,7 @@ int len, sio_len;
 			}
 		}
 		else {
-			printf("E:year = %d, month = %d, day = %d\n", y, m, d);
+			//printf("E:year = %d, month = %d, day = %d\n", y, m, d);
 			if (sfd > 0) {
 				fsync(sfd);
 				close(sfd);
