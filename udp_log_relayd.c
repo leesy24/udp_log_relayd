@@ -70,6 +70,18 @@ int year, month, day;
 int sfd = 0;
 int limit;
 char prefix[9+1+1];
+//
+//#define rBUF_MAX (10)
+#define rBUF_SIZE (300) //BufRecordSize...GDC&PJK
+char rBUF[50][rBUF_SIZE];
+int  rBUFcnt=0;
+int  rBUFmax=10;
+
+
+// /flash/udp_log_relayd 6000 192.168.0.251 6000
+// /flash/udp_log_relayd 6000 192.168.0.251 6000 20 
+// /<----------------------------------------------for rBUFmax
+// 							 "udp_log_relayd_v1.12_20190214a2.c"
 
 //===============================================================================	
 int main (int argc, char *argv[])
@@ -111,6 +123,16 @@ int main (int argc, char *argv[])
 
 		strcpy(relay_ip, argv[2]);
 		relay_port = atoi(argv[3]);
+		
+		if (argc >= 4)
+		{
+			rBUFmax = atoi(argv[4]);
+			if(rBUFmax>50)
+			{
+				printf("fixed..rBUFmax:20count\n");
+				rBUFmax=20;
+			}
+		}
 	}
 
 	if (SB_DEBUG) 
@@ -403,9 +425,27 @@ int len, sio_len;
 			if (sfd > 0)
 			{
 				if (strlen(words[2]) == 9) sprintf(prefix, "%s ", words[2]);
+				/**
 				write(sfd, prefix, strlen(prefix));
 				write(sfd, WORK, len);
 				fsync(sfd);
+				**/
+				
+				strncpy( rBUF[rBUFcnt], prefix, strlen(prefix) );
+				if (len >= (rBUF_SIZE-20)) 
+				{ 	sprintf(&WORK[rBUF_SIZE-20], "\r\n");  len=strlen(WORK);  }
+				strncpy( &rBUF[rBUFcnt][strlen(prefix)], WORK, len );  //Buf..LogRecords
+				//
+				if ( rBUFcnt >= (rBUFmax - 1) )  //rBUF
+				{
+					for ( rBUFcnt=0; rBUFcnt<rBUFmax ; rBUFcnt++ )
+					{
+						write(sfd, rBUF[rBUFcnt], strlen(rBUF[rBUFcnt]) );
+					}
+					fsync(sfd);
+					rBUFcnt=0;
+				}
+				else rBUFcnt++;
 			}
 		}
 		else {
@@ -421,9 +461,27 @@ int len, sio_len;
 	else {
 		if (sfd > 0)
 		{
+			/**
 			write(sfd, prefix, strlen(prefix));
 			write(sfd, WORK, len);
 			fsync(sfd);
+			**/
+			
+			strncpy( rBUF[rBUFcnt], prefix, strlen(prefix) );
+			if (len >= (rBUF_SIZE-20)) 
+			{ 	sprintf(&WORK[rBUF_SIZE-20], "\r\n");  len=strlen(WORK);  }
+			strncpy( &rBUF[rBUFcnt][strlen(prefix)], WORK, len );  //Buf..LogRecords
+			//
+			if ( rBUFcnt >= (rBUFmax - 1) )
+			{
+				for ( rBUFcnt=0; rBUFcnt<rBUFmax ; rBUFcnt++ )
+				{
+					write(sfd, rBUF[rBUFcnt], strlen(rBUF[rBUFcnt]) );
+				}
+				fsync(sfd);
+				rBUFcnt=0;
+			}
+			else rBUFcnt++;
 		}
 		else {
 			write(SYS.sfd, WORK, len);
